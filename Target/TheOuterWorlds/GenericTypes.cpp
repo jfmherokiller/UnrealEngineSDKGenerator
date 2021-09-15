@@ -174,6 +174,12 @@ UEClass UEProperty::StaticClass()
 	return c;
 }
 //---------------------------------------------------------------------------
+//unsigned long UEProperty::GetBitMask() const
+//{
+//	unsigned long bm = static_cast<UBoolProperty*>(object)->BitMask;
+//	return *(WORD*)((ULONG_PTR)&bm + 2);
+//}
+//---------------------------------------------------------------------------
 //UENumericProperty
 //---------------------------------------------------------------------------
 UEClass UENumericProperty::StaticClass()
