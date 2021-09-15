@@ -5,7 +5,7 @@
 #include "IGenerator.hpp"
 #include "Package.hpp"
 
-void PrintFileHeader(std::ostream& os, const std::vector<std::string>& includes, bool isHeaderFile)
+void PrintFileHeader(std::ostream& os, const std::vector<std::string>& includes, const bool isHeaderFile)
 {
 	extern IGenerator* generator;
 
@@ -14,12 +14,22 @@ void PrintFileHeader(std::ostream& os, const std::vector<std::string>& includes,
 		os << "#pragma once\n\n";
 	}
 
-	os << tfm::format("// %s (%s) SDK\n\n", generator->GetGameName(), generator->GetGameVersion())
+	os << tfm::format("// %s SDK\n\n", generator->GetGameName())
 		<< tfm::format("#ifdef _MSC_VER\n\t#pragma pack(push, 0x%X)\n#endif\n\n", generator->GetGlobalMemberAlignment());
 
 	if (!includes.empty())
 	{
-		for (auto&& i : includes) { os << "#include " << i << "\n"; }
+		for (auto&& i : includes)
+		{
+			if (i[0] != '<' && i[0] != '"')
+			{
+				os << "#include \"" << i << "\"\n";
+			}
+			else
+			{
+				os << "#include " << i << "\n";
+			}
+		}
 		os << "\n";
 	}
 
@@ -29,7 +39,7 @@ void PrintFileHeader(std::ostream& os, const std::vector<std::string>& includes,
 	}
 }
 
-void PrintFileHeader(std::ostream& os, bool isHeaderFile)
+void PrintFileHeader(std::ostream& os, const bool isHeaderFile)
 {
 	extern IGenerator* generator;
 
@@ -55,7 +65,7 @@ void PrintSectionHeader(std::ostream& os, const char* name)
 		<< "//---------------------------------------------------------------------------\n\n";
 }
 
-std::string GenerateFileName(FileContentType type, const Package& package)
+std::string GenerateFileName(const FileContentType type, const Package& package)
 {
 	extern IGenerator* generator;
 

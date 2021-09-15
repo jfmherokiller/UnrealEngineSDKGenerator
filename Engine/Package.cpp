@@ -14,8 +14,6 @@
 #include "FunctionFlags.hpp"
 #include "PrintHelper.hpp"
 
-std::unordered_map<UEObject, const Package*> Package::PackageMap;
-
 /// <summary>
 /// Compare two properties.
 /// </summary>
@@ -30,7 +28,7 @@ bool ComparePropertyLess(const UEProperty& lhs, const UEProperty& rhs)
 	{
 		return lhs.Cast<UEBoolProperty>() < rhs.Cast<UEBoolProperty>();
 	}
-	
+
 	return lhs.GetOffset() < rhs.GetOffset();
 }
 
@@ -86,8 +84,6 @@ bool Package::Save(const fs::path& path) const
 
 		return true;
 	}
-	
-	Logger::Log("skip empty Package: %s", packageObj.GetName());
 
 	return false;
 }
@@ -142,10 +138,13 @@ void Package::GeneratePrerequisites(const UEObject& obj, std::unordered_map<UEOb
 	{
 		processedObjects[obj] = true;
 
-		auto outer = obj.GetOuter();
-		if (outer.IsValid() && outer != obj)
+		if (!isScriptStruct)
 		{
-			GeneratePrerequisites(outer, processedObjects);
+			auto outer = obj.GetOuter();
+			if (outer.IsValid() && outer != obj)
+			{
+				GeneratePrerequisites(outer, processedObjects);
+			}
 		}
 
 		auto structObj = obj.Cast<UEStruct>();
@@ -412,7 +411,7 @@ void Package::GenerateClass(const UEClass& classObj)
 	}
 
 	generator->GetPredefinedClassMethods(c.FullName, c.PredefinedMethods);
-	
+
 	if (generator->ShouldUseStrings())
 	{
 		c.PredefinedMethods.push_back(IGenerator::PredefinedMethod::Inline(tfm::format(R"(	static UClass* StaticClass()
@@ -846,7 +845,7 @@ void Package::GenerateMethods(const UEClass& classObj, std::vector<Method>& meth
 					parameters.emplace_back(std::make_pair(prop, std::move(p)));
 				}
 			}
-			
+
 			std::sort(std::begin(parameters), std::end(parameters), [](auto&& lhs, auto&& rhs) { return ComparePropertyLess(lhs.first, rhs.first); });
 
 			for (auto& param : parameters)
@@ -863,9 +862,19 @@ void Package::SaveStructs(const fs::path& path) const
 {
 	extern IGenerator* generator;
 
+	using namespace cpplinq;
+
 	std::ofstream os(path / GenerateFileName(FileContentType::Structs, *this));
 
-	PrintFileHeader(os, true);
+	std::vector<std::string> includes{ { tfm::format("%s_Basic.hpp", generator->GetGameNameShort()) } };
+
+	auto dependencyNames = from(this->dependencies)
+		>> select([](auto&& p) { return GenerateFileName(FileContentType::Classes, Package(p)); })
+		>> experimental::container();
+
+	includes.insert(includes.end(), std::begin(dependencyNames), std::end(dependencyNames));
+
+	PrintFileHeader(os, includes, true);
 
 	if (!constants.empty())
 	{
@@ -898,7 +907,7 @@ void Package::SaveClasses(const fs::path& path) const
 
 	std::ofstream os(path / GenerateFileName(FileContentType::Classes, *this));
 
-	PrintFileHeader(os, true);
+	PrintFileHeader(os, { GenerateFileName(FileContentType::Structs, *this) }, true);
 
 	if (!classes.empty())
 	{
@@ -913,8 +922,6 @@ void Package::SaveFunctions(const fs::path& path) const
 {
 	extern IGenerator* generator;
 
-	using namespace cpplinq;
-
 	if (generator->ShouldGenerateFunctionParametersFile())
 	{
 		SaveFunctionParameters(path);
@@ -922,7 +929,7 @@ void Package::SaveFunctions(const fs::path& path) const
 
 	std::ofstream os(path / GenerateFileName(FileContentType::Functions, *this));
 
-	PrintFileHeader(os, { "\"../SDK.hpp\"" }, false);
+	PrintFileHeader(os, { GenerateFileName(FileContentType::FunctionParameters, *this) }, false);
 
 	PrintSectionHeader(os, "Functions");
 
@@ -946,7 +953,7 @@ void Package::SaveFunctions(const fs::path& path) const
 				os << m.Body << "\n\n";
 			}
 		}
-		
+
 		for (auto&& m : c.Methods)
 		{
 			//Method Info
@@ -976,7 +983,7 @@ void Package::SaveFunctionParameters(const fs::path& path) const
 
 	std::ofstream os(path / GenerateFileName(FileContentType::FunctionParameters, *this));
 
-	PrintFileHeader(os, { "\"../SDK.hpp\"" }, true);
+	PrintFileHeader(os, { GenerateFileName(FileContentType::Classes, *this) }, true);
 
 	PrintSectionHeader(os, "Parameters");
 
@@ -1063,7 +1070,7 @@ void Package::PrintStruct(std::ostream& os, const ScriptStruct& ss) const
 void Package::PrintClass(std::ostream& os, const Class& c) const
 {
 	using namespace cpplinq;
-	
+
 	os << "// " << c.FullName << "\n// ";
 	if (c.InheritedSize)
 	{

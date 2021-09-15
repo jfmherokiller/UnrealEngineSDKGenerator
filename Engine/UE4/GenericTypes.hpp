@@ -183,7 +183,11 @@ public:
 
 	Info GetInfo() const;
 
+	static bool GetCustomPropertyInfo(const UEProperty& property, Info &info);
+
 	static UEClass StaticClass();
+
+	unsigned long GetBitMask() const;
 };
 
 class UENumericProperty : public UEProperty
@@ -411,6 +415,16 @@ public:
 	using UEAssetObjectProperty::UEAssetObjectProperty;
 
 	UEClass GetMetaClass() const;
+
+	UEProperty::Info GetInfo() const;
+
+	static UEClass StaticClass();
+};
+
+class UESoftObjectProperty : public UEObjectPropertyBase
+{
+public:
+	using UEObjectPropertyBase::UEObjectPropertyBase;
 
 	UEProperty::Info GetInfo() const;
 

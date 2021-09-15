@@ -2,6 +2,7 @@
 // by KN4CK3R
 // https://www.oldschoolhack.me
 
+#define NOMINMAX
 #include <windows.h>
 
 #include <fstream>
@@ -57,28 +58,25 @@ void Dump(const fs::path& path)
 /// <param name="path">The path where to create the sdk header.</param>
 /// <param name="processedObjects">The list of processed objects.</param>
 /// <param name="packageOrder">The package order info.</param>
-void SaveSDKHeader(const fs::path& path, const std::unordered_map<UEObject, bool>& processedObjects, const std::vector<std::unique_ptr<Package>>& packages)
+void SaveSDKHeader(const fs::path& path, const std::unordered_map<UEObject, bool>& processedObjects, const std::vector<Package>& packages)
 {
 	std::ofstream os(path / "SDK.hpp");
 
 	os << "#pragma once\n\n"
-		<< tfm::format("// %s (%s) SDK\n\n", generator->GetGameName(), generator->GetGameVersion());
-
-	//Includes
-	os << "#include <set>\n";
-	os << "#include <string>\n";
-	for (auto&& i : generator->GetIncludes())
-	{
-		os << "#include " << i << "\n";
-	}
+		<< tfm::format("// %s SDK\n\n", generator->GetGameName());
 
 	//include the basics
 	{
 		{
 			std::ofstream os2(path / "SDK" / tfm::format("%s_Basic.hpp", generator->GetGameNameShort()));
 
-			PrintFileHeader(os2, true);
-			
+			std::vector<std::string> includes{ { "<unordered_set>" }, { "<string>" } };
+
+			auto&& generatorIncludes = generator->GetIncludes();
+			includes.insert(includes.end(), std::begin(generatorIncludes), std::end(generatorIncludes));
+
+			PrintFileHeader(os2, includes, true);
+
 			os2 << generator->GetBasicDeclarations() << "\n";
 
 			PrintFileFooter(os2);
@@ -88,7 +86,11 @@ void SaveSDKHeader(const fs::path& path, const std::unordered_map<UEObject, bool
 		{
 			std::ofstream os2(path / "SDK" / tfm::format("%s_Basic.cpp", generator->GetGameNameShort()));
 
-			PrintFileHeader(os2, { "\"../SDK.hpp\"" }, false);
+			std::vector<std::string> includes2{ 
+				{ tfm::format("%s_CoreUObject_classes.hpp", generator->GetGameNameShort()) }, 
+				{ tfm::format("%s_Engine_classes.hpp", generator->GetGameNameShort()) } };
+
+			PrintFileHeader(os2, includes2, false);
 
 			os2 << generator->GetBasicDefinitions() << "\n";
 
@@ -124,13 +126,56 @@ void SaveSDKHeader(const fs::path& path, const std::unordered_map<UEObject, bool
 
 	for (auto&& package : packages)
 	{
-		os << R"(#include "SDK/)" << GenerateFileName(FileContentType::Structs, *package) << "\"\n";
-		os << R"(#include "SDK/)" << GenerateFileName(FileContentType::Classes, *package) << "\"\n";
-		if (generator->ShouldGenerateFunctionParametersFile())
-		{
-			os << R"(#include "SDK/)" << GenerateFileName(FileContentType::FunctionParameters, *package) << "\"\n";
-		}
+		os << R"(#include "SDK/)" << GenerateFileName(FileContentType::Classes, package) << "\"\n";
 	}
+
+	os << "\n" << "namespace " << generator->GetNamespaceName() << "\n";
+
+	os << R"({
+	static bool DataCompare(PBYTE pData, PBYTE bSig, const char* szMask)
+	{
+		for (; *szMask; ++szMask, ++pData, ++bSig)
+		{
+			if (*szMask == 'x' && *pData != *bSig)
+				return false;
+		}
+		return (*szMask) == 0;
+	}
+
+	static DWORD_PTR FindPattern(DWORD_PTR dwAddress, DWORD dwSize, const char* pbSig, const char* szMask, long offset)
+	{
+		size_t length = strlen(szMask);
+		for (size_t i = NULL; i < dwSize - length; i++)
+		{
+			if (DataCompare((PBYTE)dwAddress + i, (PBYTE)pbSig, szMask))
+				return dwAddress + i + offset;
+		}
+		return 0;
+	}
+
+	static void InitSDK()
+	{
+		DWORD_PTR BaseAddress = (DWORD_PTR)GetModuleHandle(NULL);
+
+		MODULEINFO ModuleInfo;
+		GetModuleInformation(GetCurrentProcess(), (HMODULE)BaseAddress, &ModuleInfo, sizeof(ModuleInfo));
+
+		auto GNamesAddress = FindPattern(BaseAddress, ModuleInfo.SizeOfImage,
+			"\x48\x8B\x05\x00\x00\x00\x03\x48\x85\xC0\x0F\x85\xB0", "xxx???xxxxxxx", 0);
+		auto GNamesOffset = *reinterpret_cast<uint32_t*>(GNamesAddress + 3);
+		FName::GNames = *reinterpret_cast<TNameEntryArray**>(GNamesAddress + 7 + GNamesOffset);
+
+		auto GObjectsAddress = FindPattern(BaseAddress, ModuleInfo.SizeOfImage,
+			"\x48\x8D\x0D\x00\x00\x00\x04\xE8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\xE8\x00\x00\x00\x01", "xxx???xx???xx???xx???x", 0);
+		auto GObjectsOffset = *reinterpret_cast<uint32_t*>(GObjectsAddress + 3);
+		UObject::GObjects = reinterpret_cast<FUObjectArray*>(GObjectsAddress + 7 + GObjectsOffset);
+
+		auto GWorldAddress = FindPattern(BaseAddress, ModuleInfo.SizeOfImage,
+			"\x48\x8B\x1D\x00\x00\x00\x04\x48\x85\xDB\x74\x3B", "xxx???xxxxxx", 0);
+		auto GWorldOffset = *reinterpret_cast<uint32_t*>(GWorldAddress + 3);
+		UWorld::GWorld = reinterpret_cast<UWorld**>(GWorldAddress + 7 + GWorldOffset);
+	}
+})";
 }
 
 /// <summary>
@@ -143,8 +188,8 @@ void ProcessPackages(const fs::path& path)
 
 	const auto sdkPath = path / "SDK";
 	fs::create_directories(sdkPath);
-	
-	std::vector<std::unique_ptr<Package>> packages;
+
+	std::vector<Package> packages;
 
 	std::unordered_map<UEObject, bool> processedObjects;
 
@@ -156,31 +201,12 @@ void ProcessPackages(const fs::path& path)
 
 	for (auto obj : packageObjects)
 	{
-		auto package = std::make_unique<Package>(obj);
+		Package package(obj);
 
-		package->Process(processedObjects);
-		if (package->Save(sdkPath))
+		package.Process(processedObjects);
+		if (package.Save(sdkPath))
 		{
-			Package::PackageMap[obj] = package.get();
-
 			packages.emplace_back(std::move(package));
-		}
-	}
-
-	if (!packages.empty())
-	{
-		// std::sort doesn't work, so use a simple bubble sort
-		//std::sort(std::begin(packages), std::end(packages), PackageDependencyComparer());
-		const PackageDependencyComparer comparer;
-		for (auto i = 0u; i < packages.size() - 1; ++i)
-		{
-			for (auto j = 0u; j < packages.size() - i - 1; ++j)
-			{
-				if (!comparer(packages[j], packages[j + 1]))
-				{
-					std::swap(packages[j], packages[j + 1]);
-				}
-			}
 		}
 	}
 
@@ -221,7 +247,7 @@ DWORD WINAPI OnAttach(LPVOID lpParameter)
 
 	outputDirectory /= generator->GetGameNameShort();
 	fs::create_directories(outputDirectory);
-	
+
 	std::ofstream log(outputDirectory / "Generator.log");
 	Logger::SetStream(&log);
 
