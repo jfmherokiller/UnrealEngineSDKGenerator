@@ -196,6 +196,7 @@ public:
 	class UClass* Class;
 	FName Name;
 	UObject* Outer;
+	void* Unk;
 };
 
 class UField : public UObject
@@ -248,7 +249,6 @@ public:
 	UProperty* DestructorLink;
 	UProperty* PostConstructLink;
 	TArray<UObject*> ScriptObjectReferences;
-	TArray<UProperty*> AllSaveGameProps;
 };
 
 class UFunction : public UStruct

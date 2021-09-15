@@ -13,10 +13,6 @@ public:
 class FChunkedFixedUObjectArray
 {
 public:
-	enum
-	{
-		ElementsPerChunk = 64 * 1024
-	};
 
 	FUObjectItem& GetByIndex(int Index)
 	{
@@ -25,6 +21,7 @@ public:
 
 	FUObjectItem* GetObjectPtr(int Index)
 	{
+		auto ElementsPerChunk = MaxElements / MaxChunks;
 		auto ChunkIndex = Index / ElementsPerChunk;
 		auto WithinChunkIndex = Index % ElementsPerChunk;
 		auto Chunk = Objects[ChunkIndex];
