@@ -1,8 +1,4 @@
-#pragma once
-
-#include <set>
-#include <string>
-#include <windows.h>
+#include <Windows.h>
 
 struct FPointer
 {
@@ -11,8 +7,8 @@ struct FPointer
 
 struct FQWord
 {
-	int A;
-	int B;
+	int32_t A;
+	int32_t B;
 };
 
 struct FName
@@ -22,9 +18,9 @@ struct FName
 };
 
 template<class T>
-struct TArray
+class TArray
 {
-	friend struct FString;
+	friend class FString;
 
 public:
 	TArray()
@@ -67,11 +63,12 @@ public:
 	ValueType Value;
 };
 
-struct FString : public TArray<wchar_t>
+class FString : public TArray<wchar_t>
 {
+public:
 	std::string ToString() const
 	{
-		int size = WideCharToMultiByte(CP_UTF8, 0, Data, Count, nullptr, 0, nullptr, nullptr);
+		const int size = WideCharToMultiByte(CP_UTF8, 0, Data, Count, nullptr, 0, nullptr, nullptr);
 		std::string str(size, 0);
 		WideCharToMultiByte(CP_UTF8, 0, Data, Count, &str[0], size, nullptr, nullptr);
 		return str;
@@ -123,7 +120,17 @@ public:
 
 struct FText
 {
-	char UnknownData[0x18];
+	char UnknownData[0x28];
+};
+
+struct FScriptDelegate
+{
+	char UnknownData[0x14];
+};
+
+struct FScriptMulticastDelegate
+{
+	char UnknownData[0x10];
 };
 
 struct FWeakObjectPtr
@@ -151,6 +158,17 @@ class FAssetPtr : public TPersistentObjectPtr<FStringAssetReference>
 
 };
 
+struct FSoftObjectPath
+{
+	FName AssetPathName;
+	FString SubPathString;
+};
+
+class FSoftObjectPtr : public TPersistentObjectPtr<FSoftObjectPath>
+{
+
+};
+
 struct FGuid
 {
 	uint32_t A;
@@ -169,25 +187,13 @@ class FLazyObjectPtr : public TPersistentObjectPtr<FUniqueObjectGuid>
 
 };
 
-struct FScriptDelegate
-{
-	unsigned char UnknownData[20];
-};
-
-struct FScriptMulticastDelegate
-{
-	unsigned char UnknownData[16];
-};
-
-class UClass;
-
 class UObject
 {
 public:
 	FPointer VTableObject;
 	int32_t ObjectFlags;
 	int32_t InternalIndex;
-	UClass* Class;
+	class UClass* Class;
 	FName Name;
 	UObject* Outer;
 };
@@ -198,12 +204,35 @@ public:
 	UField* Next;
 };
 
+//class UEnum : public UField
+//{
+//public:
+//	FString CppType;
+//	TArray<FName> Names;
+//	int32_t CppForm;
+//};
+
 class UEnum : public UField
 {
 public:
 	FString CppType; //0x0030 
 	TArray<TPair<FName, uint64_t>> Names; //0x0040 
-	__int64 CppForm; //0x0050 
+	int64_t CppForm; //0x0050 
+};
+
+class UProperty : public UField
+{
+public:
+	int32_t ArrayDim;
+	int32_t ElementSize;
+	FQWord PropertyFlags;
+	int16_t RepIndex;
+	FName RepNotifyFunc;
+	int32_t Offset;
+	UProperty* PropertyLinkNext;
+	UProperty* NextRef;
+	UProperty* DestructorLinkNext;
+	UProperty* PostConstructLinkNext;
 };
 
 class UStruct : public UField
@@ -212,62 +241,52 @@ public:
 	UStruct* SuperField;
 	UField* Children;
 	int32_t PropertySize;
+	TArray<uint8_t> Script;
 	int32_t MinAlignment;
-	char pad_0x0048[0x40];
-};
-
-class UScriptStruct : public UStruct
-{
-public:
-	char pad_0x0088[0x10]; //0x0088
+	UProperty* PropertyLink;
+	UProperty* RefLink;
+	UProperty* DestructorLink;
+	UProperty* PostConstructLink;
+	TArray<UObject*> ScriptObjectReferences;
+	TArray<UProperty*> AllSaveGameProps;
 };
 
 class UFunction : public UStruct
 {
 public:
-	__int32 FunctionFlags; //0x0088
-	__int16 RepOffset; //0x008C
-	__int8 NumParms; //0x008E
-	char pad_0x008F[0x1]; //0x008F
-	__int16 ParmsSize; //0x0090
-	__int16 ReturnValueOffset; //0x0092
-	__int16 RPCId; //0x0094
-	__int16 RPCResponseId; //0x0096
-	class UProperty* FirstPropertyToInit; //0x0098
-	UFunction* EventGraphFunction; //0x00A0
-	__int32 EventGraphCallOffset; //0x00A8
-	char pad_0x00AC[0x4]; //0x00AC
-	void* Func; //0x00B0
+	uint32_t FunctionFlags;
+	uint16_t RepOffset;
+	uint8_t NumParms;
+	uint16_t ParmsSize;
+	uint16_t ReturnValueOffset;
+	uint16_t RPCId;
+	uint16_t RPCResponseId;
+	UProperty* FirstPropertyToInit;
+	void* Func;
 };
 
 class UClass : public UStruct
 {
 public:
-	char pad_0x0088[0x198]; //0x0088
+	char UnknownData[0xF8];
 };
 
-class UProperty : public UField
+class UScriptStruct : public UStruct
 {
 public:
-	__int32 ArrayDim; //0x0030 
-	__int32 ElementSize; //0x0034 
-	FQWord PropertyFlags; //0x0038
-	__int32 PropertySize; //0x0040 
-	char pad_0x0044[0xC]; //0x0044
-	__int32 Offset; //0x0050 
-	char pad_0x0054[0x24]; //0x0054
+	char UnknownData[0x18];
 };
 
 class UNumericProperty : public UProperty
 {
 public:
-	
+
 };
 
 class UByteProperty : public UNumericProperty
 {
 public:
-	UEnum*		Enum;										// 0x0088 (0x04)
+	UEnum* Enum;
 };
 
 class UUInt16Property : public UNumericProperty
@@ -433,6 +452,6 @@ public:
 class UEnumProperty : public UProperty
 {
 public:
-	class UNumericProperty* UnderlyingProp; //0x0070
-	class UEnum* Enum; //0x0078
-}; //Size: 0x0080
+	UNumericProperty* UnderlyingProp;
+	UEnum* Enum;
+};

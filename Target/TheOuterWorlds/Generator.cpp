@@ -1,5 +1,3 @@
-#include "IGenerator.hpp"
-#include "ObjectsStore.hpp"
 #include "NamesStore.hpp"
 
 class Generator : public IGenerator
@@ -12,7 +10,6 @@ public:
 			{ "ScriptStruct CoreUObject.Quat", 16 },
 			{ "ScriptStruct CoreUObject.Transform", 16 },
 			{ "ScriptStruct CoreUObject.Vector4", 16 },
-
 			{ "ScriptStruct Engine.RootMotionSourceGroup", 8 }
 		};
 
@@ -47,8 +44,14 @@ public:
 			{ "class UStruct*", "SuperField" },
 			{ "class UField*", "Children" },
 			{ "int32_t", "PropertySize" },
+			{ "TArray<uint8_t>", "Script" },
 			{ "int32_t", "MinAlignment" },
-			{ "unsigned char", "UnknownData0x0048[0x40]" }
+			{ "class UProperty*", "PropertyLink" },
+			{ "class UProperty*", "RefLink" },
+			{ "class UProperty*", "DestructorLink" },
+			{ "class UProperty*", "PostConstructLink" },
+			{ "TArray<UObject*>", "ScriptObjectReferences" },
+			{ "TArray<UProperty*>", "AllSaveGameProps" },
 		};
 		predefinedMembers["Class CoreUObject.Function"] = {
 			{ "int32_t", "FunctionFlags" },
@@ -59,8 +62,6 @@ public:
 			{ "int16_t", "RPCId" },
 			{ "int16_t", "RPCResponseId" },
 			{ "class UProperty*", "FirstPropertyToInit" },
-			{ "class UFunction*", "EventGraphFunction" },
-			{ "int32_t", "EventGraphCallOffset" },
 			{ "void*", "Func" }
 		};
 
@@ -86,7 +87,7 @@ public:
 		};
 
 		predefinedMethods["Class CoreUObject.Object"] = {
-			PredefinedMethod::Inline(R"(	static inline TUObjectArray& GetGlobalObjects()
+			PredefinedMethod::Inline(R"(	static inline FChunkedFixedUObjectArray& GetGlobalObjects()
 	{
 		return GObjects->ObjObjects;
 	})"),
@@ -131,7 +132,7 @@ public:
 	{
 		for (int i = 0; i < GetGlobalObjects().Num(); ++i)
 		{
-			auto object = GetGlobalObjects().GetByIndex(i);
+			auto object = GetGlobalObjects().GetByIndex(i).Object;
 	
 			if (object == nullptr)
 			{
@@ -152,7 +153,7 @@ public:
 			PredefinedMethod::Inline(R"(	template<typename T>
 	static T* GetObjectCasted(std::size_t index)
 	{
-		return static_cast<T*>(GetGlobalObjects().GetByIndex(index));
+		return static_cast<T*>(GetGlobalObjects().GetByIndex(index).Object);
 	})"),
 			PredefinedMethod::Default("bool IsA(UClass* cmp) const", R"(bool UObject::IsA(UClass* cmp) const
 {
@@ -175,6 +176,14 @@ public:
 	})")
 		};
 
+		predefinedMethods["Class Engine.World"] = {
+			PredefinedMethod::Inline(R"(	static UWorld** GWorld;
+	static inline UWorld* GetWorld()
+	{
+		return *GWorld;
+	};)")
+		};
+
 		return true;
 	}
 
@@ -195,12 +204,16 @@ public:
 
 	std::string GetNamespaceName() const override
 	{
-		return "Classes";
+		return "SDK";
 	}
 
 	std::vector<std::string> GetIncludes() const override
 	{
 		return { };
+	}
+	std::string GetOutputDirectory() const override
+	{
+		return R"(D:\Modding\OuterWorldsBase2\GeneratedSdk)";
 	}
 
 	std::string GetBasicDeclarations() const override
@@ -212,80 +225,10 @@ inline Fn GetVFunction(const void *instance, std::size_t index)
 	return reinterpret_cast<Fn>(vtable[index]);
 }
 
-class UObject;
-
-class FUObjectItem
-{
-public:
-	UObject* Object;
-	int32_t Flags;
-	int32_t ClusterIndex;
-	int32_t SerialNumber;
-
-	enum class EInternalObjectFlags : int32_t
-	{
-		None = 0,
-		Native = 1 << 25,
-		Async = 1 << 26,
-		AsyncLoading = 1 << 27,
-		Unreachable = 1 << 28,
-		PendingKill = 1 << 29,
-		RootSet = 1 << 30,
-		NoStrongReference = 1 << 31
-	};
-
-	inline bool IsUnreachable() const
-	{
-		return !!(Flags & static_cast<std::underlying_type_t<EInternalObjectFlags>>(EInternalObjectFlags::Unreachable));
-	}
-	inline bool IsPendingKill() const
-	{
-		return !!(Flags & static_cast<std::underlying_type_t<EInternalObjectFlags>>(EInternalObjectFlags::PendingKill));
-	}
-};
-
-class TUObjectArray
-{
-public:
-	inline int32_t Num() const
-	{
-		return NumElements;
-	}
-
-	inline UObject* GetByIndex(int32_t index) const
-	{
-		return Objects[index].Object;
-	}
-
-	inline FUObjectItem* GetItemByIndex(int32_t index) const
-	{
-		if (index < NumElements)
-		{
-			return &Objects[index];
-		}
-		return nullptr;
-	}
-
-private:
-	FUObjectItem* Objects;
-	int32_t MaxElements;
-	int32_t NumElements;
-};
-
-class FUObjectArray
-{
-public:
-	int32_t ObjFirstGCIndex;
-	int32_t ObjLastNonGCIndex;
-	int32_t MaxObjectsNotConsideredByGC;
-	int32_t OpenForDisregardForGC;
-	TUObjectArray ObjObjects;
-};
-
 template<class T>
-struct TArray
+class TArray
 {
-	friend struct FString;
+	friend class FString;
 
 public:
 	inline TArray()
@@ -316,35 +259,69 @@ public:
 
 private:
 	T* Data;
-	int32_t Count;
-	int32_t Max;
+	int Count;
+	int Max;
+};
+
+class UObject;
+
+class FUObjectItem
+{
+public:
+	UObject* Object;
+	int Flags;
+	int ClusterRootIndex;
+	int SerialNumber;
+};
+
+class FChunkedFixedUObjectArray
+	{
+public:
+	inline int Num() const
+	{
+		return NumElements;
+	}
+
+	enum
+	{
+		NumElementsPerChunk = 64 * 1024,
+	};
+
+	inline FUObjectItem const* GetObjectPtr(int Index) const
+	{
+		auto ChunkIndex = Index / NumElementsPerChunk;
+		auto WithinChunkIndex = Index % NumElementsPerChunk;
+		auto Chunk = Objects[ChunkIndex];
+		return Chunk + WithinChunkIndex;
+	}
+
+	inline FUObjectItem const& GetByIndex(int Index) const
+	{
+		return *GetObjectPtr(Index);
+	}
+
+private:
+	FUObjectItem** Objects;
+	FUObjectItem* PreAllocatedObjects;
+	int MaxElements;
+	int NumElements;
+	int MaxChunks;
+	int NumChunks;
+};
+
+class FUObjectArray
+{
+public:
+	int ObjFirstGCIndex;
+	int ObjLastNonGCIndex;
+	int MaxObjectsNotConsideredByGC;
+	bool OpenForDisregardForGC;
+	FChunkedFixedUObjectArray ObjObjects;
 };
 
 class FNameEntry
 {
 public:
-	static const auto NAME_WIDE_MASK = 0x1;
-	static const auto NAME_INDEX_SHIFT = 1;
-
-	int32_t Index;
-	char UnknownData00[0x04];
-	FNameEntry* HashNext;
-	union
-	{
-		char AnsiName[1024];
-		wchar_t WideName[1024];
-	};
-
-	inline const int32_t GetIndex() const
-	{
-		return Index >> NAME_INDEX_SHIFT;
-	}
-
-	inline bool IsWide() const
-	{
-		return Index & NAME_WIDE_MASK;
-	}
-
 	inline const char* GetAnsiName() const
 	{
 		return AnsiName;
@@ -354,60 +331,59 @@ public:
 	{
 		return WideName;
 	}
+
+private:
+	int Index;
+	FNameEntry* HashNext;
+
+	union
+	{
+		char AnsiName[1024];
+		wchar_t WideName[1024];
+	};
 };
 
-template<typename ElementType, int32_t MaxTotalElements, int32_t ElementsPerChunk>
-class TStaticIndirectArrayThreadSafeRead
+class TNameEntryArray
 {
 public:
-	inline size_t Num() const
+	inline int Num() const
 	{
 		return NumElements;
 	}
 
-	inline bool IsValidIndex(int32_t index) const
+	inline bool IsValidIndex(int Index) const
 	{
-		return index < Num() && index >= 0;
+		return Index < Num() && Index >= 0;
 	}
 
-	inline ElementType const* const& operator[](int32_t index) const
+	inline FNameEntry const* const& operator[](int Index) const
 	{
-		return *GetItemPtr(index);
+		return *GetItemPtr(Index);
 	}
 
 private:
-	inline ElementType const* const* GetItemPtr(int32_t Index) const
+	enum {
+		ElementsPerChunk = 16 * 1024,
+		ChunkTableSize = (2 * 1024 * 1024 + ElementsPerChunk - 1) / ElementsPerChunk
+	};
+
+	inline FNameEntry const* const* GetItemPtr(int Index) const
 	{
-		int32_t ChunkIndex = Index / ElementsPerChunk;
-		int32_t WithinChunkIndex = Index % ElementsPerChunk;
-		ElementType** Chunk = Chunks[ChunkIndex];
+		const auto ChunkIndex = Index / ElementsPerChunk;
+		const auto WithinChunkIndex = Index % ElementsPerChunk;
+		const auto Chunk = Chunks[ChunkIndex];
 		return Chunk + WithinChunkIndex;
 	}
 
-	enum
-	{
-		ChunkTableSize = (MaxTotalElements + ElementsPerChunk - 1) / ElementsPerChunk
+	FNameEntry** Chunks[ChunkTableSize];
+	int NumElements;
+	int NumChunks;
 	};
-
-	ElementType** Chunks[ChunkTableSize];
-	int32_t NumElements;
-	int32_t NumChunks;
-};
-
-using TNameEntryArray = TStaticIndirectArrayThreadSafeRead<FNameEntry, 2 * 1024 * 1024, 16384>;
 
 struct FName
 {
-	union
-	{
-		struct
-		{
-			int32_t ComparisonIndex;
-			int32_t Number;
-		};
-
-		uint64_t CompositeComparisonValue;
-	};
+	int ComparisonIndex;
+	int Number;
 
 	inline FName()
 		: ComparisonIndex(0),
@@ -415,7 +391,7 @@ struct FName
 	{
 	};
 
-	inline FName(int32_t i)
+	inline FName(int i)
 		: ComparisonIndex(i),
 		  Number(0)
 	{
@@ -425,7 +401,7 @@ struct FName
 		: ComparisonIndex(0),
 		  Number(0)
 	{
-		static std::set<int> cache;
+		static std::unordered_set<int> cache;
 
 		for (auto i : cache)
 		{
@@ -470,15 +446,16 @@ struct FName
 	};
 };
 
-struct FString : private TArray<wchar_t>
+class FString : public TArray<wchar_t>
 {
+public:
 	inline FString()
 	{
 	};
 
 	FString(const wchar_t* other)
 	{
-		Max = Count = *other ? std::wcslen(other) + 1 : 0;
+		Max = Count = *other ? static_cast<int32_t>(std::wcslen(other)) + 1 : 0;
 
 		if (Count)
 		{
@@ -498,7 +475,7 @@ struct FString : private TArray<wchar_t>
 
 	std::string ToString() const
 	{
-		auto length = std::wcslen(Data);
+		const auto length = std::wcslen(Data);
 
 		std::string str(length, '\0');
 
@@ -626,11 +603,6 @@ class TMap
 struct FWeakObjectPtr
 {
 public:
-	inline bool SerialNumbersMatch(FUObjectItem* ObjectItem) const
-	{
-		return ObjectItem->SerialNumber == ObjectSerialNumber;
-	}
-
 	bool IsValid() const;
 
 	UObject* Get() const;
@@ -746,6 +718,24 @@ template<typename ObjectType>
 class TLazyObjectPtr : FLazyObjectPtr
 {
 
+};
+
+class UClass;
+
+template<class TClass>
+class TSubclassOf
+{
+public:
+	TSubclassOf(UClass* Class) {
+		this->Class = Class;
+	}
+
+	inline UClass* GetClass()
+	{
+		return Class;
+	}
+private:
+	UClass* Class;
 };)";
 	}
 
@@ -753,46 +743,7 @@ class TLazyObjectPtr : FLazyObjectPtr
 	{
 		return R"(TNameEntryArray* FName::GNames = nullptr;
 FUObjectArray* UObject::GObjects = nullptr;
-//---------------------------------------------------------------------------
-bool FWeakObjectPtr::IsValid() const
-{
-	if (ObjectSerialNumber == 0)
-	{
-		return false;
-	}
-	if (ObjectIndex < 0)
-	{
-		return false;
-	}
-	auto ObjectItem = UObject::GetGlobalObjects().GetItemByIndex(ObjectIndex);
-	if (!ObjectItem)
-	{
-		return false;
-	}
-	if (!SerialNumbersMatch(ObjectItem))
-	{
-		return false;
-	}
-	return !(ObjectItem->IsUnreachable() || ObjectItem->IsPendingKill());
-}
-//---------------------------------------------------------------------------
-UObject* FWeakObjectPtr::Get() const
-{
-	if (IsValid())
-	{
-		auto ObjectItem = UObject::GetGlobalObjects().GetItemByIndex(ObjectIndex);
-		if (ObjectItem)
-		{
-			return ObjectItem->Object;
-		}
-	}
-	return nullptr;
-}
-//---------------------------------------------------------------------------)";
-	}
-	std::string GetOutputDirectory() const override
-	{
-		return R"(D:\Modding\OuterWorldsBase2\GeneratedSdk)";
+UWorld** UWorld::GWorld = nullptr;)";
 	}
 };
 

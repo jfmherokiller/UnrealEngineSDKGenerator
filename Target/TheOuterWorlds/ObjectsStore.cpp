@@ -1,9 +1,5 @@
-#include <Windows.h>
-
-#include "PatternFinder.hpp"
 #include "ObjectsStore.hpp"
-
-#include "EngineClasses.hpp"
+#include "PatternFinder.hpp"
 
 class FUObjectItem
 {
@@ -53,17 +49,12 @@ public:
 	FChunkedFixedUObjectArray ObjObjects;
 };
 
-FUObjectArray* GlobalObjects = nullptr;
+FUObjectArray* GlobalObjects;
 
 bool ObjectsStore::Initialize()
 {
-	auto address = FindPattern(GetModuleHandleW(nullptr), reinterpret_cast<const unsigned char*>("\x48\x8D\x0D\x00\x00\x00\x00\xC6\x05\x00\x00\x00\x00\x01\xE8\x00\x00\x00\x00\xC6\x05"), "xxx????xx????xx????xx");
-	if (address == -1)
-	{
-		return false;
-	}
-	auto offset = *reinterpret_cast<uint32_t*>(address + 3);
-	GlobalObjects = reinterpret_cast<decltype(GlobalObjects)>(address + 7 + offset);
+	auto Address = FindPattern(GetModuleHandleW(0), (unsigned char*)"\x48\x8D\x0D\x00\x00\x00\x00\xC6\x05\x00\x00\x00\x00\x01\xE8\x00\x00\x00\x00\xC6\x05", "xxx????xx????xx????xx");
+	GlobalObjects = (FUObjectArray*)(Address + *(DWORD*)(Address + 3) + 7);
 
 	return true;
 }
