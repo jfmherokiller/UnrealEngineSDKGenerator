@@ -487,6 +487,174 @@ Package::Member Package::CreateBitfieldPadding(size_t id, size_t offset, std::st
 	return ss;
 }
 
+//void Package::GenerateMembers(const UEStruct& structObj, size_t offset, const std::vector<UEProperty>& properties, std::vector<Member>& members) const
+//{
+//	extern IGenerator* generator;
+//
+//	unsigned long lastBit;
+//	std::unordered_map<std::string, size_t> uniqueMemberNames;
+//	size_t unknownDataCounter = 0;
+//
+//	for (auto& prop : properties)
+//	{
+//		bool bEmplaced = false;
+//		if (offset < prop.GetOffset())
+//		{
+//			auto size = prop.GetOffset() - offset;
+//			if (size >= generator->GetGlobalMemberAlignment())
+//			{
+//				members.emplace_back(Member::Unknown(unknownDataCounter++, offset, size, "MISSED OFFSET"));
+//				bEmplaced = true;
+//			}
+//		}
+//
+//		auto info = prop.GetInfo();
+//		if (info.Type != UEProperty::PropertyType::Unknown)
+//		{
+//			Member sp;
+//			sp.Offset = prop.GetOffset();
+//			sp.Size = info.Size;
+//
+//			sp.Type = info.CppType;
+//			sp.Name = MakeValidName(prop.GetName());
+//
+//			auto it = uniqueMemberNames.find(sp.Name);
+//			if (it == std::end(uniqueMemberNames))
+//			{
+//				uniqueMemberNames[sp.Name] = 1;
+//			}
+//			else
+//			{
+//				++uniqueMemberNames[sp.Name];
+//				sp.Name += tfm::format("%02d", it->second);
+//			}
+//
+//			if (prop.GetArrayDim() > 1)
+//			{
+//				sp.Name += tfm::format("[0x%X]", prop.GetArrayDim());
+//			}
+//
+//
+//			sp.Flags = static_cast<size_t>(prop.GetPropertyFlags());
+//			sp.FlagsString = StringifyFlags(prop.GetPropertyFlags());
+//
+//			if (prop.IsA<UEBoolProperty>())  //seems to be a full byte
+//			{
+//				int n_pad = sp.Offset - offset;
+//				if (prop.GetBitMask() == 0xFF01) {
+//					//add missing bytes
+//					if (!bEmplaced && n_pad > 0) {
+//						members.emplace_back(Member::Unknown(unknownDataCounter++, offset, n_pad, "MISSED OFFSET"));
+//					}
+//				}
+//				else {
+//					char szBit[124];
+//					unsigned long BitMask = prop.GetBitMask();
+//
+//					bool bSameByte = offset != sp.Offset;
+//					//check if we are at the same byte, if not check if we added 8 last time.
+//					if (!bSameByte && BitMask != 0x0101) {
+//
+//						auto sp2 = sp;
+//						if (lastBit != 0x8080) {
+//							sp2.Offset -= 1;
+//							//fill previus byte
+//
+//							while (lastBit < 0x8080) {
+//								sp2.Type = info.CppType;
+//								auto newBit = lastBit ? lastBit * 2 : 0x0101;
+//								sprintf_s(szBit, 124, "%04X", newBit);
+//								sp2.FlagsString += "MANUAL_ADD_BIT " + std::string(szBit);
+//
+//								sprintf_s(szBit, 124, "%04X_%04X", sp2.Offset, newBit); //PrevBit
+//								sp2.Name = "bUnknown" + std::string(szBit) + " : 1";
+//								members.emplace_back(std::move(sp2));
+//
+//								lastBit = newBit;
+//								//add
+//							}
+//
+//							sp2.Offset++;
+//						}
+//						lastBit = 0;
+//						//get last bitmask and fill it up
+//						while (lastBit < 0x8080) {
+//							sp2.Type = info.CppType;
+//							auto newBit = lastBit ? lastBit * 2 : 0x0101;
+//							sprintf_s(szBit, 124, "%04X", newBit);
+//							sp2.FlagsString += "MANUAL_ADD_BIT " + std::string(szBit);
+//
+//							sprintf_s(szBit, 124, "%04X_%04X", sp2.Offset, newBit); //PrevBit
+//							sp2.Name = "bUnknown" + std::string(szBit) + " : 1";
+//							members.emplace_back(std::move(sp2));
+//
+//							lastBit = newBit;
+//							break;
+//							//add
+//						}
+//						sprintf_s(szBit, 124, "%04X", BitMask);
+//						lastBit = BitMask;
+//						sp.Name += " : 1";
+//						sp.FlagsString += " BITFIELD: " + std::string(szBit);
+//					}
+//					else {
+//						//check if missing any bit since last one
+//						sprintf_s(szBit, 124, "%04X", BitMask);
+//						if (BitMask == 0x0101) {
+//
+//							//check if last is aligned..
+//						}
+//						else if (lastBit * 2 != BitMask) { //is 0x0101
+//						 //add one bit
+//							sprintf_s(szBit, 124, "%04X", BitMask / 2); //PrevBit
+//							auto sp2 = sp;
+//							sp2.FlagsString += "MANUAL_ADD_BIT " + std::string(szBit);
+//
+//							sprintf_s(szBit, 124, "%04X_%04X", sp.Offset, BitMask / 2); //PrevBit
+//							sp2.Name = "bUnknown" + std::string(szBit) + " : 1";
+//							members.emplace_back(std::move(sp2));
+//							//if(BitMask )
+//							//check if last bitmask = bitmask/2
+//						}
+//						sprintf_s(szBit, 124, "%04X", BitMask);
+//						lastBit = BitMask;
+//						sp.Name += " : 1";
+//						sp.FlagsString += " BITFIELD: " + std::string(szBit);
+//					}
+//				}
+//			}
+//			else {
+//				lastBit = 0x8080;
+//			}
+//
+//			members.emplace_back(std::move(sp));
+//
+//			auto sizeMismatch = static_cast<int>(prop.GetElementSize() * prop.GetArrayDim()) - static_cast<int>(info.Size * prop.GetArrayDim());
+//			if (sizeMismatch > 0)
+//			{
+//				members.emplace_back(Member::Unknown(unknownDataCounter++, offset, sizeMismatch, "FIX WRONG TYPE SIZE OF PREVIUS PROPERTY"));
+//			}
+//		}
+//		else
+//		{
+//			auto info2 = prop.GetInfo();
+//			auto size = prop.GetElementSize() * prop.GetArrayDim();
+//			members.emplace_back(Member::Unknown(unknownDataCounter++, offset, size, "UNKNOWN PROPERTY: " + prop.GetFullName()));
+//		}
+//
+//		offset = prop.GetOffset() + (prop.GetElementSize() * prop.GetArrayDim());
+//	}
+//
+//	if (offset < structObj.GetPropertySize())
+//	{
+//		auto size = structObj.GetPropertySize() - offset;
+//		if (size >= generator->GetGlobalMemberAlignment())
+//		{
+//			members.emplace_back(Member::Unknown(unknownDataCounter++, offset, size, "MISSED OFFSET"));
+//		}
+//	}
+//}
+
 void Package::GenerateMembers(const UEStruct& structObj, size_t offset, const std::vector<UEProperty>& properties, std::vector<Member>& members) const
 {
 	extern IGenerator* generator;
