@@ -14,23 +14,43 @@ public:
 	int SerialNumber;
 };
 
-class TUObjectArray
+class FChunkedFixedUObjectArray
 {
 public:
-	FUObjectItem* Objects;
-	int32_t MaxElements;
-	int32_t NumElements;
+	enum
+	{
+		ElementsPerChunk = 64 * 1024
+	};
+
+	FUObjectItem& GetByIndex(int Index)
+	{
+		return *GetObjectPtr(Index);
+	}
+
+	FUObjectItem* GetObjectPtr(int Index)
+	{
+		auto ChunkIndex = Index / ElementsPerChunk;
+		auto WithinChunkIndex = Index % ElementsPerChunk;
+		auto Chunk = Objects[ChunkIndex];
+		return Chunk + WithinChunkIndex;
+	}
+
+	FUObjectItem** Objects;
+	FUObjectItem* PreAllocatedObjects;
+	int MaxElements;
+	int NumElements;
+	int MaxChunks;
+	int NumChunks;
 };
 
 class FUObjectArray
 {
 public:
-	__int32 ObjFirstGCIndex; //0x0000
-	__int32 ObjLastNonGCIndex; //0x0004
-	__int32 MaxObjectsNotConsideredByGC; //0x0008
-	__int32 OpenForDisregardForGC; //0x000C
-
-	TUObjectArray ObjObjects; //0x0010
+	int ObjFirstGCIndex;
+	int ObjLastNonGCIndex;
+	int MaxObjectsNotConsideredByGC;
+	bool OpenForDisregardForGC;
+	FChunkedFixedUObjectArray ObjObjects;
 };
 
 FUObjectArray* GlobalObjects = nullptr;
@@ -60,5 +80,5 @@ size_t ObjectsStore::GetObjectsNum() const
 
 UEObject ObjectsStore::GetById(size_t id) const
 {
-	return GlobalObjects->ObjObjects.Objects[id].Object;
+	return GlobalObjects->ObjObjects.GetByIndex(id).Object;
 }
