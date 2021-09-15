@@ -17,7 +17,7 @@ public:
 		};
 
 		virtualFunctionPattern["Class CoreUObject.Object"] = {
-			{ "\x45\x33\xF6\x4D\x8B\xE0", "xxxxxx", 0x200, R"(	inline void ProcessEvent(class UFunction* function, void* parms)
+			{ "\x88\x45\x00\x48\x8D\x4D\x20\x48\x8D\x45\x00\x48\x89\x45", "xxxxxxxxxxxxxx", 0x400, R"(	inline void ProcessEvent(class UFunction* function, void* parms)
 	{
 		return GetVFunction<void(*)(UObject*, class UFunction*, void*)>(this, %d)(this, function, parms);
 	})" }
