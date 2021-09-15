@@ -8,10 +8,7 @@
 class FUObjectItem
 {
 public:
-	UObject* Object; //0x0000
-	__int32 Flags; //0x0008
-	__int32 ClusterIndex; //0x000C
-	__int32 SerialNumber; //0x0010
+	int ClusterRootIndex;
 };
 
 class TUObjectArray
