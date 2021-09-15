@@ -161,19 +161,19 @@ void SaveSDKHeader(const fs::path& path, const std::unordered_map<UEObject, bool
 		GetModuleInformation(GetCurrentProcess(), (HMODULE)BaseAddress, &ModuleInfo, sizeof(ModuleInfo));
 
 		auto GNamesAddress = FindPattern(BaseAddress, ModuleInfo.SizeOfImage,
-			"\x48\x8B\x05\x00\x00\x00\x03\x48\x85\xC0\x0F\x85\xB0", "xxx???xxxxxxx", 0);
-		auto GNamesOffset = *reinterpret_cast<uint32_t*>(GNamesAddress + 3);
-		FName::GNames = *reinterpret_cast<TNameEntryArray**>(GNamesAddress + 7 + GNamesOffset);
+			"\xE8\x00\x00\x00\x00\x48\x8B\xC3\x48\x89\x1D\x00\x00\x00\x00\x48\x8B\x5C\x24\x00\x48\x83\xC4\x28\xC3\x33\xDB\x48\x89\x1D\x00\x00\x00\x00\x8B\xC3\x48\x8B\x5C\x24\x00\x48\x83\xC4\x00\xC3", "xxx????xx????xx????xx", 0);
+		auto GNamesOffset = *reinterpret_cast<uint32_t*>(GNamesAddress + 11);
+		FName::GNames = *reinterpret_cast<TNameEntryArray**>(GNamesAddress + 15 + GNamesOffset);
 
 		auto GObjectsAddress = FindPattern(BaseAddress, ModuleInfo.SizeOfImage,
-			"\x48\x8D\x0D\x00\x00\x00\x04\xE8\x00\x00\x00\x00\xE8\x00\x00\x00\x00\xE8\x00\x00\x00\x01", "xxx???xx???xx???xx???x", 0);
+			"\x48\x8D\x0D\x00\x00\x00\x00\xC6\x05\x00\x00\x00\x00\x01\xE8\x00\x00\x00\x00\xC6\x05", "x????xxxxxx????xxxx?xxxxxxxxxx????xxxxxx?xxx?x", 0);
 		auto GObjectsOffset = *reinterpret_cast<uint32_t*>(GObjectsAddress + 3);
 		UObject::GObjects = reinterpret_cast<FUObjectArray*>(GObjectsAddress + 7 + GObjectsOffset);
 
 		auto GWorldAddress = FindPattern(BaseAddress, ModuleInfo.SizeOfImage,
-			"\x48\x8B\x1D\x00\x00\x00\x04\x48\x85\xDB\x74\x3B", "xxx???xxxxxx", 0);
-		auto GWorldOffset = *reinterpret_cast<uint32_t*>(GWorldAddress + 3);
-		UWorld::GWorld = reinterpret_cast<UWorld**>(GWorldAddress + 7 + GWorldOffset);
+			"0F 2E ? 74 ? 48 8B 1D ? ? ? ? 48 85 DB 74", "xx?x?xxx????xxxx", 0);
+		auto GWorldOffset = *reinterpret_cast<uint32_t*>(GWorldAddress + 8);
+		UWorld::GWorld = reinterpret_cast<UWorld**>(GWorldAddress + 12 + GWorldOffset);
 	}
 })";
 }
@@ -215,6 +215,7 @@ void ProcessPackages(const fs::path& path)
 
 DWORD WINAPI OnAttach(LPVOID lpParameter)
 {
+	MessageBoxA(nullptr, "ObjectsStore::Initialize failed", "Error", 0);
 	if (!ObjectsStore::Initialize())
 	{
 		MessageBoxA(nullptr, "ObjectsStore::Initialize failed", "Error", 0);
