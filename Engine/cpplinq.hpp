@@ -29,7 +29,7 @@
 #include <vector>
 #include <deque>
 #include <unordered_set>
-#// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 #ifdef _MSC_VER
 #   pragma warning (push)
 #       pragma warning (disable:4512)   // 'class' : assignment operator could not be generated
@@ -111,7 +111,7 @@ namespace cpplinq
 		template<typename TValue>
 		struct cleanup_type
 		{
-			typedef typename std::remove_const<typename std::remove_reference<TValue>::type>::type type;
+			typedef std::remove_const_t<std::remove_reference_t<TValue>> type;
 		};
 
 		template<typename TRangeBuilder, typename TRange>
@@ -336,7 +336,7 @@ namespace cpplinq
 			}
 
 		private:
-			typedef typename std::aligned_storage<sizeof(value_type), std::alignment_of<value_type>::value>::type storage_type;
+			typedef std::aligned_storage_t<sizeof(value_type), std::alignment_of_v<value_type>> storage_type;
 
 			storage_type storage;
 			bool is_initialized;
@@ -813,7 +813,7 @@ namespace cpplinq
 
 			CPPLINQ_INLINEMETHOD auto next() CPPLINQ_NOEXCEPT
 			{
-				auto d = done;
+				const auto d = done;
 				done = true;
 				return !d;
 			}
@@ -878,7 +878,7 @@ namespace cpplinq
 				  sort_ascending(sort_ascending),
 				  current(invalid_size)
 			{
-				static_assert(!std::is_convertible<range_type, sorting_range>::value, "orderby may not follow orderby or thenby");
+				static_assert(!std::is_convertible_v<range_type, sorting_range>, "orderby may not follow orderby or thenby");
 			}
 
 			CPPLINQ_INLINEMETHOD orderby_range(orderby_range const & v)
@@ -1032,7 +1032,7 @@ namespace cpplinq
 				  sort_ascending(sort_ascending),
 				  current(invalid_size)
 			{
-				static_assert(std::is_convertible<range_type, sorting_range>::value, "thenby may only follow orderby or thenby");
+				static_assert(std::is_convertible_v<range_type, sorting_range>, "thenby may only follow orderby or thenby");
 			}
 
 			CPPLINQ_INLINEMETHOD thenby_range(thenby_range const & v)
@@ -1071,14 +1071,12 @@ namespace cpplinq
 
 			CPPLINQ_INLINEMETHOD auto compare_values(value_type const & l, value_type const & r) const
 			{
-				auto pless = range.compare_values(l, r);
-				if (pless)
+				if (auto pless = range.compare_values(l, r))
 				{
 					return true;
 				}
 
-				auto pgreater = range.compare_values(r, l);
-				if (pgreater)
+				if (auto pgreater = range.compare_values(r, l))
 				{
 					return false;
 				}
@@ -1203,7 +1201,7 @@ namespace cpplinq
 				: range(v.range),
 				  capacity(v.capacity),
 				  reversed(v.reversed),
-				  start(v.start),
+				  start(v.start)
 			{
 			}
 

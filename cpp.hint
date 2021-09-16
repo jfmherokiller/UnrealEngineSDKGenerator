@@ -1,0 +1,7 @@
+// Hint files help the Visual Studio IDE interpret Visual C++ identifiers
+// such as names of functions and macros.
+// For more information see https://go.microsoft.com/fwlink/?linkid=865984
+#define CPPLINQ_ASSERT(expr) assert(expr)
+#define CPPLINQ_INLINEMETHOD
+#define CPPLINQ_NOEXCEPT
+#define CPPLINQ_METHOD
