@@ -270,7 +270,7 @@ public:
 		}
 
 		/// <summary>Adds a predefined method which gets included as an inline method.</summary>
-		/// <param name="Body">The body.</param>
+		/// <param name="body">The body.</param>
 		/// <returns>The method.</returns>
 		static PredefinedMethod Inline(std::string&& body)
 		{
@@ -279,7 +279,7 @@ public:
 	};
 
 	/// <summary>Gets the predefined methods of the specific class.</summary>
-	/// <param name="className">The name of the class.</param>
+	/// <param name="name">The name of the class.</param>
 	/// <param name="methods">[out] The predefined methods.</param>
 	/// <returns>true if predefined methods are found.</returns>
 	virtual bool GetPredefinedClassMethods(const std::string& name, std::vector<PredefinedMethod>& methods) const

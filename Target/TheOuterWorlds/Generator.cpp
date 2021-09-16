@@ -14,13 +14,13 @@ public:
 		};
 
 		virtualFunctionPattern["Class CoreUObject.Object"] = {
-			{ "\x88\x45\x00\x48\x8D\x4D\x20\x48\x8D\x45\x00\x48\x89\x45", "xxxxxxxxxxxxxx", 0x400, R"(	inline void ProcessEvent(class UFunction* function, void* parms)
+			{ "\x40\x55\x56\x57\x41\x54\x41\x55\x41\x56\x41\x57\x48\x81\xEC\x00\x00\x00\x00\x48\x8D\x6C\x24\x00\x48\x89\x9D\x00\x00\x00\x00\x48\x8B\x05\x00\x00\x00", "xxxxxxxxxxxxxxx????xxxx?xxx????xxx???", 0x400, R"(	inline void ProcessEvent(class UFunction* function, void* parms)
 	{
 		return GetVFunction<void(*)(UObject*, class UFunction*, void*)>(this, %d)(this, function, parms);
 	})" }
 		};
 		virtualFunctionPattern["Class CoreUObject.Class"] = {
-			{ "\x4C\x8B\xDC\x57\x48\x81\xEC", "xxxxxxx", 0x200, R"(	inline UObject* CreateDefaultObject()
+			{ "\x4C\x8B\xDC\x57\x48\x81\xEC\x00\x00\x00\x00\x48\x8B\x05\x00\x00\x00\x00\x48\x33\xC4\x48\x89\x84\x24\x00\x00\x00\x00\x48\x83\xB9\x00\x00\x00\x00\x00", "xxxxxxx????xxx????xxxxxxx????xxx?????", 0x200, R"(	inline UObject* CreateDefaultObject()
 	{
 		return GetVFunction<UObject*(*)(UClass*)>(this, %d)(this);
 	})" }
