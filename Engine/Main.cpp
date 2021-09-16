@@ -215,7 +215,7 @@ void ProcessPackages(const fs::path& path)
 
 DWORD WINAPI OnAttach(LPVOID lpParameter)
 {
-	MessageBoxA(nullptr, "ObjectsStore::Initialize failed", "Error", 0);
+
 	if (!ObjectsStore::Initialize())
 	{
 		MessageBoxA(nullptr, "ObjectsStore::Initialize failed", "Error", 0);
